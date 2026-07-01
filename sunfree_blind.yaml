@@ -69,8 +69,8 @@ globals:
 
 uart:
   id: my_uart_bus
-  #tx_pin: GPIO21 <- edit this to set appropriate pin for your pcb
-  #rx_pin: GPIO20 <- edit this to set appropriate pin for your pcb
+  tx_pin: GPIO43 #<- edit this to set appropriate pin for your pcb
+  rx_pin: GPIO44 #<- edit this to set appropriate pin for your pcb
   baud_rate: 38400
   
   debug:
