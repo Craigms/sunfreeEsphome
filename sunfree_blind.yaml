@@ -1,0 +1,199 @@
+# Board: ESP32-C3 Super Mini (Generic)
+# Definition: definitions/boards/esp32-c3-supermini/manifest.yaml
+
+esphome:
+  name: sunfree-blind
+  friendly_name: Sunfree Blind
+
+esp32:
+  variant: esp32c3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: "lbr/u2Nj0aVkUZ4dZ7NrOVHU04o604qnGwbN909nBp4="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: 8.5
+  ap:
+    ssid: Sunrui Blind Fallback Hotspot
+    password: "FY12tw5DFGnD"
+
+captive_portal:
+
+substitutions:
+  PACKET_MOTOR_HEADER: "0x68" 
+  PACKET_MODULE_HEADER: "0x86"
+  PACKET_HEADER_INDEX: "0"
+  PACKET_SEQNUM_INDEX: "1"
+  PACKET_FUNCTION_INDEX: "2"
+  PACKET_SUB_FUNCTION_INDEX: "3"
+  PACKET_DATA_LENGTH_INDEX: "4"
+  PACKET_DATA_INDEX: "5"
+  PACKET_CRC_SIZE: "2"
+  PACKET_MAX_LENGTH: "32" # protocol actually allows for up to 250, but there are no packets which use that size
+  
+  PACKET_FUNCTION_CONTROL: '0x01'
+  PACKET_FUNCTION_QUERY: '0x02'
+  
+  PACKET_SUB_FUNCTION_OPEN: '0x10'
+  PACKET_SUB_FUNCTION_CLOSE: '0x20'
+  PACKET_SUB_FUNCTION_STOP: '0x30'
+  PACKET_SUB_FUNCTION_PERCENTAGE: '0x42'
+  PACKET_SUB_FUNCTION_POSITION: '0xD4'
+  
+  PACKET_SUB_FUNCTION_MOTOR_STATUS: '0x01'
+
+  PACKET_MOTOR_STATUS_DATA_LENGTH: '16'
+  PACKET_MOTOR_STATUS_STATE_INDEX: '5'
+  PACKET_MOTOR_STATUS_PERCENTAGE_INDEX: '6'
+  PACKET_MOTOR_STATUS_ANGLE_INDEX: '7'
+  PACKET_MOTOR_STATUS_SPEED_INDEX: '8'
+  PACKET_MOTOR_STATUS_POWER_INDEX: '9'
+  PACKET_MOTOR_STATUS_POSITION_INDEX: '10'
+  PACKET_MOTOR_STATUS_MOTOR_CURRENT_INDEX: '12'
+  PACKET_MOTOR_STATUS_TRAVEL_STATUS_INDEX: '14'
+  
+globals:
+  - id: rx_buffer
+    type: uint8_t[255]
+
+  - id: rx_buffer_ptr
+    type: uint8_t
+    initial_value: '0'
+
+uart:
+  id: my_uart_bus
+  tx_pin: GPIO21
+  rx_pin: GPIO20
+  baud_rate: 38400
+  
+  debug:
+    dummy_receiver: true
+    direction: RX
+    after:
+      bytes: 1
+      timeout: 0ms
+    sequence:
+      - lambda: |-       
+          id(rx_buffer)[id(rx_buffer_ptr)] = bytes[0];
+          
+          // wait for valid header byte, don't increment array ptr until it's received
+          if (id(rx_buffer_ptr) == ${PACKET_HEADER_INDEX} && bytes[0] == ${PACKET_MOTOR_HEADER})
+          { 
+            id(rx_buffer_ptr) =  id(rx_buffer_ptr) + 1;
+          }
+
+          // just store the value until we receive datalength byte ... 
+          else if( id(rx_buffer_ptr) <= ${PACKET_DATA_LENGTH_INDEX} )  // basically, == 4 should be last value
+          {
+            id(rx_buffer_ptr) = id(rx_buffer_ptr) + 1;             
+          }
+
+          // and still just store the value
+          else if (id(rx_buffer_ptr) <= (${PACKET_DATA_LENGTH_INDEX} + id(rx_buffer)[${PACKET_DATA_LENGTH_INDEX}] + ${PACKET_CRC_SIZE} - 1 )) // if datalength ==0, then 5 should be last value
+          { 
+            id(rx_buffer_ptr) = id(rx_buffer_ptr) + 1; 
+          }
+
+          // Last byte of crc received, process packet and update esphome cover component., if datalength=0, then is 6, otherwise 6+datalength.
+          else
+          { 
+            ESP_LOGD("uart", " size = %u, packet data: 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X", id(rx_buffer_ptr), id(rx_buffer)[0], id(rx_buffer)[1],id(rx_buffer)[2],id(rx_buffer)[3],id(rx_buffer)[4],id(rx_buffer)[5],id(rx_buffer)[6],id(rx_buffer)[7], id(rx_buffer)[8],id(rx_buffer)[9],id(rx_buffer)[10],id(rx_buffer)[11],id(rx_buffer)[12],id(rx_buffer)[13]);
+
+            // crc could be calcualted and checked here but just assume crc is correct for the moment.
+  
+            if (id(rx_buffer)[${PACKET_FUNCTION_INDEX}] == ${PACKET_FUNCTION_QUERY} && 
+                id(rx_buffer)[${PACKET_SUB_FUNCTION_INDEX}] == ${PACKET_SUB_FUNCTION_MOTOR_STATUS} && 
+                id(rx_buffer)[${PACKET_DATA_LENGTH_INDEX}] == ${PACKET_MOTOR_STATUS_DATA_LENGTH})
+            { // there is really only 1 type of packet we are interested in
+              
+              switch(id(rx_buffer)[ ${PACKET_MOTOR_STATUS_STATE_INDEX}])
+              {
+              case 0:
+                id(hBlind).current_operation = COVER_OPERATION_IDLE;
+                break;
+
+              case 1:
+                id(hBlind).current_operation = COVER_OPERATION_OPENING;
+                break;
+
+              case 2:
+                id(hBlind).current_operation = COVER_OPERATION_CLOSING;
+                break;
+              }
+              id(hBlind).position = ((float)id(rx_buffer)[${PACKET_MOTOR_STATUS_PERCENTAGE_INDEX}])/100; 
+              ESP_LOGD("uart", "position raw: %d, float: %f", id(rx_buffer)[${PACKET_MOTOR_STATUS_PERCENTAGE_INDEX}], id(hBlind).position );
+              id(hBlind).publish_state();
+            }
+            id(rx_buffer_ptr) = 0; // processing complete, empty buffer and get ready for next packet
+          }
+  
+          if (id(rx_buffer_ptr) > ${PACKET_MAX_LENGTH}) 
+          { // max packet size reached, discard packet and wait for next header
+            id(rx_buffer_ptr) = 0;
+            ESP_LOGD("uart", "max packet size reached, data discarded");
+          }   
+          
+cover:
+  platform: template
+  name: "Honeycomb Blind"
+  id: "hBlind"
+  device_class: blind
+  optimistic: false
+  has_position: true
+
+  open_action:
+    - uart.write: [0x86, 0x00, 0x01, 0x01, 0x00, 0xBE, 0x3D] #CRC16_X_25 seems to be the working crc!
+        
+  close_action:
+    - uart.write: [0x86, 0x00, 0x01, 0x02, 0x00, 0xD6, 0x17]
+        
+  stop_action:
+    - uart.write: [0x86, 0x00, 0x01, 0x03, 0x00, 0x0E, 0x0E]
+
+  position_action:
+    # desired position available in "pos" variable.  but we need to calculate a crc.    
+    - lambda: |-
+        uint8_t sendBuffer[10] = {0x86, 0x00, 0x01, 0x04, 0x02, 0, 0, 0, 0, 0};
+        uint16_t checksum;
+
+        sendBuffer[5] = (uint8_t)((float)(pos * 100));
+        
+        uint8_t i,flage,count;
+        uint8_t *buf = sendBuffer;
+        count = 7;
+        uint16_t crc = 0xFFFF;// CRC initialization
+        while (count--)
+        {
+          crc ^= *buf;
+          for(i=0;i<8;i++)
+          {
+            flage = crc & 0X0001;
+            crc >>= 1;
+            if(flage)
+              crc ^= 0X8408;
+          }
+          buf++;
+        }  
+        crc ^= 0xffff;
+ 
+        sendBuffer[7] = crc & 0xFF;
+        sendBuffer[8] = crc >> 8;
+        id(my_uart_bus).write_array(sendBuffer, 9);
+      
+
+      
+interval:
+  - interval: 1s
+    then:
+      - uart.write: [0x86, 0x00, 0x02, 0x01, 0x00, 0xDA, 0xD2] #motor status query
