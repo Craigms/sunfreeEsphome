@@ -1,5 +1,5 @@
-# Board: ESP32-C3 Super Mini (Generic)
-# Definition: definitions/boards/esp32-c3-supermini/manifest.yaml
+# Board: ESP32-S3 Super Mini (Generic)
+
 
 esphome:
   name: sunfree-blind
