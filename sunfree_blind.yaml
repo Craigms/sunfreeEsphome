@@ -22,7 +22,6 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  output_power: 8.5
   ap:
     ssid: Sunrui Blind Fallback Hotspot
     password: "FY12tw5DFGnD"
