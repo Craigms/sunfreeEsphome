@@ -6,8 +6,7 @@ esphome:
   friendly_name: Sunfree Blind
 
 esp32:
-  variant: esp32c3
-  flash_size: 4MB
+  variant: esp32s3
   framework:
     type: esp-idf
 
