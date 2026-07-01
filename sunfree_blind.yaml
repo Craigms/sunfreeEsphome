@@ -22,9 +22,7 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  ap:
-    ssid: Sunrui Blind Fallback Hotspot
-    password: "FY12tw5DFGnD"
+
 
 captive_portal:
 
@@ -92,23 +90,23 @@ uart:
           }
 
           // just store the value until we receive datalength byte ... 
-          else if( id(rx_buffer_ptr) <= ${PACKET_DATA_LENGTH_INDEX} )  // basically, == 4 should be last value
+          else if( id(rx_buffer_ptr) <= ${PACKET_DATA_LENGTH_INDEX} )  
           {
             id(rx_buffer_ptr) = id(rx_buffer_ptr) + 1;             
           }
 
           // and still just store the value
-          else if (id(rx_buffer_ptr) <= (${PACKET_DATA_LENGTH_INDEX} + id(rx_buffer)[${PACKET_DATA_LENGTH_INDEX}] + ${PACKET_CRC_SIZE} - 1 )) // if datalength ==0, then 5 should be last value
+          else if (id(rx_buffer_ptr) <= (${PACKET_DATA_LENGTH_INDEX} + id(rx_buffer)[${PACKET_DATA_LENGTH_INDEX}] + ${PACKET_CRC_SIZE} - 1 )) 
           { 
             id(rx_buffer_ptr) = id(rx_buffer_ptr) + 1; 
           }
 
-          // Last byte of crc received, process packet and update esphome cover component., if datalength=0, then is 6, otherwise 6+datalength.
+          // Last byte of crc received, process packet and update esphome cover component
           else
           { 
             ESP_LOGD("uart", " size = %u, packet data: 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X 0x%X", id(rx_buffer_ptr), id(rx_buffer)[0], id(rx_buffer)[1],id(rx_buffer)[2],id(rx_buffer)[3],id(rx_buffer)[4],id(rx_buffer)[5],id(rx_buffer)[6],id(rx_buffer)[7], id(rx_buffer)[8],id(rx_buffer)[9],id(rx_buffer)[10],id(rx_buffer)[11],id(rx_buffer)[12],id(rx_buffer)[13]);
 
-            // crc could be calcualted and checked here but just assume crc is correct for the moment.
+            // crc could be calculated and checked here but just assume crc is correct for the moment.
   
             if (id(rx_buffer)[${PACKET_FUNCTION_INDEX}] == ${PACKET_FUNCTION_QUERY} && 
                 id(rx_buffer)[${PACKET_SUB_FUNCTION_INDEX}] == ${PACKET_SUB_FUNCTION_MOTOR_STATUS} && 
@@ -160,7 +158,6 @@ cover:
     - uart.write: [0x86, 0x00, 0x01, 0x03, 0x00, 0x0E, 0x0E]
 
   position_action:
-    # desired position available in "pos" variable.  but we need to calculate a crc.    
     - lambda: |-
         uint8_t sendBuffer[10] = {0x86, 0x00, 0x01, 0x04, 0x02, 0, 0, 0, 0, 0};
         uint16_t checksum;
