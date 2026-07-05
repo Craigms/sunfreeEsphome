@@ -1,5 +1,5 @@
 Configuration yaml for esphome.
-Workes with Sunfree / senrui motor installed in Persilux blinds off aliexpress/alibaba
+Workes with Sunfree / senrui k200/u motor installed in Persilux blinds off aliexpress/alibaba
 
 Provides live update of blind position and allows for up, down and stop control.  Also allows for move blind to specified position.
 More controls could be added that would be used to set blind limits (admin mode) but I haven't bothered as you typically only do that once.
